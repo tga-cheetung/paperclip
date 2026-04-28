@@ -3,7 +3,7 @@ FROM node:lts-trixie-slim AS base
 ARG USER_UID=1000
 ARG USER_GID=1000
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates gosu curl gh git wget ripgrep python3 \
+  && apt-get install -y --no-install-recommends ca-certificates gosu curl gh git wget ripgrep python3 tini \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable
 
@@ -76,5 +76,9 @@ ENV NODE_ENV=production \
 
 EXPOSE 3100
 
-ENTRYPOINT ["docker-entrypoint.sh"]
+# tini is PID 1 to reap orphaned zombies (git/claude subprocesses leaked by
+# agent runs accumulate as zombies otherwise, eventually exhausting the
+# container's pids cgroup limit and crashing Claude CLI with "SystemResources").
+# See https://github.com/krallin/tini for the rationale.
+ENTRYPOINT ["/usr/bin/tini", "--", "docker-entrypoint.sh"]
 CMD ["node", "--import", "./server/node_modules/tsx/dist/loader.mjs", "server/dist/index.js"]
